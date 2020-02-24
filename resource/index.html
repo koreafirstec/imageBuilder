@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <canvas id="canvas" width="416" height="416"></canvas>
+    <progress id="progress" value="0" max="1000"></progress>
+    <button id="startButton" onclick="startMake()">시작</button>
+    <div id="dropzone"> drop here </div>
+
+    <ul>
+        <li>
+            회전 : <input type="checkbox" id="option_rotateAble" checked>
+        </li>
+        <li>
+            크기변경 : <input type="checkbox" id="option_sizeChange" checked>
+        </li>
+    </ul>
+
+    <p>이미지</p>
+    <ul id="ul">
+
+    </ul>
+
+    <style>
+        #canvas {
+            border: 3px solid black;
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+        #dropzone {
+            width: 416px;
+            height: 200px;
+            border: 3px solid black;
+            margin-top: 20px;
+        }
+        #ul li {
+            float: left;
+        }
+        .img {
+            width: 150px;
+            height: 150px;
+        }
+    </style>
+
+    <script src="node_modules/fabric/dist/fabric.js"></script>
+    <script>
+        const canvas = new fabric.StaticCanvas('canvas');
+        const options = Object({
+            SizeChangeAble: false,
+            RotateAble: false
+        });
+        const imageArr = [];
+        var progress = 0;
+
+        function init() {
+            setDropZone();
+        }
+        function setDropZone() {
+            let dropZone = document.getElementById('dropzone');
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach( (eventName) => {
+                dropZone.addEventListener(eventName, preventDefaults, false)
+            });
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // Highlight설정
+            ['dragenter', 'dragover'].forEach((eventName) => {
+                dropZone.addEventListener((eventName), highlight, false);
+            });
+            ['dragleave', 'drop'].forEach((eventName) => {
+                dropZone.addEventListener((eventName), unhighlighted, false);
+            });
+
+            function highlight(e) {
+                dropZone.classList.add('highlight');
+            }
+            function unhighlighted(e) {
+                dropZone.classList.remove('highlight');
+            }
+
+            //DropEvent 설정
+            dropZone.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                let dt = e.dataTransfer;
+                let files = dt.files;
+
+                fileHandler(files);
+            }
+        }
+        function fileHandler(files) {
+            ([...files]).forEach((file) => {
+                var reader = new FileReader();
+
+                reader.onload = function() {
+                    imageArr.push(reader.result);
+                    addItemList(imageArr.length - 1);
+                };
+                reader.readAsDataURL(file);
+            })
+        }
+
+        function startMake() {
+            var progressBar = document.getElementById('progress');
+            var button = document.getElementById("startButton");
+
+            options.SizeChangeAble = document.getElementById('option_sizeChange').checked;
+            options.RotateAble = document.getElementById('option_rotateAble').checked;
+
+            progress = 0;
+
+            button.disabled = true;
+
+            var interval = setInterval(() => {
+                clearView();
+                addBackgroundImage();
+                addImageFile(imageArr[Math.floor(Math.random() * imageArr.length)]);
+                progressBar.value = progress++;
+
+                if (progressBar.max < progress) {
+                    button.disabled = false;
+                    clearInterval(interval);
+                }
+            }, 250)
+        }
+
+        function addBackgroundImage() {
+            new fabric.Image.fromURL('images/bg_'+ getIntegerRandom(1, 5) +'.jpg', (bg) => {
+               bg.set({
+                   top: 0,
+                   left: 0,
+                   scaleX: canvas.width/bg.width,
+                   scaleY: canvas.height/bg.height,
+               });
+
+               canvas.setBackgroundImage(bg);
+            });
+        }
+
+        var keepedData;
+        function addImageFile(data) {
+            keepedData = data;
+
+            var imageEelement = new fabric.Image.fromURL(data, (img) => {
+                var itemNum = canvas._objects.length;
+
+                var size = getElementSize(img.width, img.height, canvas.width, canvas.height);
+                var degree = 0;
+
+                if (options.SizeChangeAble) {
+                    size = size * (Math.random() * (3 - 1) + 1);
+                }
+                if (options.RotateAble) {
+                    degree = getRandomDegree()
+                }
+
+                img.scale(size).set({
+                    angle : degree,
+                    left : getRandomPosition(canvas.width),
+                    top : getRandomPosition(canvas.height),
+                });
+                canvas.add(img);
+
+                onitemLoaded(canvas.item(itemNum));
+            }, {crossOrigin: 'anonymous'});
+        }
+
+        function onitemLoaded(item) {
+            const Coord = item.aCoords;
+
+            let tl = Coord.tl;
+            let tr = Coord.tr;
+            let bl = Coord.bl;
+            let br = Coord.br;
+
+            let left_top_x = Math.min(tl.x, tr.x, bl.x, br.x);
+            let left_top_y = Math.min(tl.y, tr.y, bl.y, br.y);
+            let right_bottom_x = Math.max(tl.x, tr.x, bl.x, br.x);
+            let right_bottom_y = Math.max(tl.y, tr.y, bl.y, br.y);
+
+            if (isOverParent(left_top_x, canvas.width) ||
+                isOverParent(left_top_y, canvas.height) ||
+                isOverParent(right_bottom_x, canvas.width) ||
+                isOverParent(right_bottom_y, canvas.height) ) {
+            //    Retry
+                canvas.remove(item);
+                addImageFile(keepedData)
+            } else {
+            //    Okay
+            //     var rect = new fabric.Rect({
+            //         left: left_top_x,
+            //         top: left_top_y,
+            //         width: right_bottom_x - left_top_x,
+            //         height: right_bottom_y - left_top_y,
+            //         fill: 'transparent',
+            //         stroke: '#ff0000',
+            //         strokeWidth: 2
+            //     });
+
+                const dataURL = canvas.toDataURL({
+                    width: canvas.width,
+                    height: canvas.height,
+                    left: 0,
+                    top: 0,
+                    format: 'png',
+                });
+
+                // canvas.add(rect);
+
+                var annoName = "pants";
+                var anno = "{\""+annoName+"\":[[" + left_top_x + "," + left_top_y + "," + right_bottom_x + "," + right_bottom_y + "]]}";
+
+                var fileName = 'image_'+ progress;
+
+                downloadAnno(anno, fileName);
+                downloadImage(dataURL, fileName);
+            }
+        }
+
+        function downloadAnno(text, fileName) {
+            var file = new Blob([text], {type: 'text/plain'});
+
+            const link = document.createElement('a');
+            link.download = fileName +'.anno';
+            link.href = URL.createObjectURL(file);
+            downloadFile(link);
+        }
+
+        function downloadImage(dataURL, fileName) {
+            const link = document.createElement('a');
+            link.download = fileName +'.jpg';
+            link.href = dataURL;
+            downloadFile(link);
+        }
+
+        function downloadFile(link) {
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function clearView() {
+            var i = canvas._objects.length;
+            while(i >= 0) {
+                canvas.remove(canvas.item(i));
+                i--
+            }
+        }
+
+        function isOverParent(value, parentSize) {
+            if (value > 0 && value < parentSize) {
+                return false
+            } else {
+                return true
+            }
+        }
+        function getIntegerRandom(from, to) {
+            return Math.floor(Math.random() * (to - from)) + from;
+        }
+        function getRandomPosition(to) {
+            return Math.random() * to
+        }
+        function getRandomDegree() {
+            return (Math.random() * 270) - 135
+        }
+        function getElementSize(imageWidth, imageHeight, width, height) {
+            var x = (width / imageWidth) * 0.2;
+            var y = (height / imageHeight) * 0.2;
+
+            return (x, y);
+        }
+
+        function addItemList(imagePosition) {
+            var ul = document.getElementById("ul");
+            var li = document.createElement("li");
+            var children = ul.children.length + 1;
+            var img = document.createElement("img");
+
+            img.setAttribute("class", "img");
+
+            li.setAttribute("id", "element"+children);
+            li.appendChild(img);
+            ul.appendChild(li);
+
+            li.firstChild.src = imageArr[imagePosition];
+        }
+
+        addBackgroundImage();
+        init();
+    </script>
+</body>
+</html>
