@@ -6,7 +6,7 @@
 </head>
 <body>
     <canvas id="canvas" width="416" height="416"></canvas>
-    <progress id="progress" value="0" max="1000"></progress>
+    <progress id="progress" value="0" max="10"></progress>
     <button id="startButton" onclick="startMake()">시작</button>
     <div id="dropzone"> drop here </div>
 
@@ -101,10 +101,13 @@
                     imageArr.push(reader.result);
                     addItemList(imageArr.length - 1);
                 };
+
                 reader.readAsDataURL(file);
             })
         }
 
+
+        var anno;
         function startMake() {
             var progressBar = document.getElementById('progress');
             var button = document.getElementById("startButton");
@@ -119,18 +122,39 @@
             var interval = setInterval(() => {
                 clearView();
                 addBackgroundImage();
-                addImageFile(imageArr[Math.floor(Math.random() * imageArr.length)]);
+
+                crashbox = [];
+                anno = "{";
+                for (i = 0; i < imageArr.length; i++) {
+                    addImageFile(imageArr[i], "hello");
+                }
+
+                anno += "}";
+
+                const dataURL = canvas.toDataURL({
+                    width: canvas.width,
+                    height: canvas.height,
+                    left: 0,
+                    top: 0,
+                    format: 'png',
+                });
+
+                var fileName = 'image_'+ progress;
+
+                downloadImage(dataURL, fileName);
+                downloadAnno(anno, fileName);
+
                 progressBar.value = progress++;
 
                 if (progressBar.max < progress) {
                     button.disabled = false;
                     clearInterval(interval);
                 }
-            }, 250)
+            }, 5000)
         }
 
         function addBackgroundImage() {
-            new fabric.Image.fromURL('images/bg_'+ getIntegerRandom(1, 5) +'.jpg', (bg) => {
+            fabric.Image.fromURL('images/bg_'+ getIntegerRandom(1, 5) +'.jpg', (bg) => {
                bg.set({
                    top: 0,
                    left: 0,
@@ -143,10 +167,10 @@
         }
 
         var keepedData;
-        function addImageFile(data) {
+        function addImageFile(data, annoName) {
             keepedData = data;
 
-            var imageEelement = new fabric.Image.fromURL(data, (img) => {
+            fabric.Image.fromURL(data, (img) => {
                 var itemNum = canvas._objects.length;
 
                 var size = getElementSize(img.width, img.height, canvas.width, canvas.height);
@@ -166,11 +190,12 @@
                 });
                 canvas.add(img);
 
-                onitemLoaded(canvas.item(itemNum));
+                onitemLoaded(canvas.item(itemNum), annoName);
             }, {crossOrigin: 'anonymous'});
         }
 
-        function onitemLoaded(item) {
+        var crashbox = [];
+        function onitemLoaded(item, annoName) {
             const Coord = item.aCoords;
 
             let tl = Coord.tl;
@@ -186,39 +211,19 @@
             if (isOverParent(left_top_x, canvas.width) ||
                 isOverParent(left_top_y, canvas.height) ||
                 isOverParent(right_bottom_x, canvas.width) ||
-                isOverParent(right_bottom_y, canvas.height) ) {
+                isOverParent(right_bottom_y, canvas.height) ||
+                checkbox(left_top_x, left_top_y, right_bottom_x, right_bottom_y)) {
             //    Retry
+                console.log("nope");
                 canvas.remove(item);
-                addImageFile(keepedData)
+                addImageFile(keepedData, annoName);
             } else {
-            //    Okay
-            //     var rect = new fabric.Rect({
-            //         left: left_top_x,
-            //         top: left_top_y,
-            //         width: right_bottom_x - left_top_x,
-            //         height: right_bottom_y - left_top_y,
-            //         fill: 'transparent',
-            //         stroke: '#ff0000',
-            //         strokeWidth: 2
-            //     });
 
-                const dataURL = canvas.toDataURL({
-                    width: canvas.width,
-                    height: canvas.height,
-                    left: 0,
-                    top: 0,
-                    format: 'png',
-                });
+                console.log("oki");
+                if (crashbox.length > 0) {anno += ","}
+                anno += "\""+annoName+"\":[[" + left_top_x + "," + left_top_y + "," + right_bottom_x + "," + right_bottom_y + "]]";
 
-                // canvas.add(rect);
-
-                var annoName = "pants";
-                var anno = "{\""+annoName+"\":[[" + left_top_x + "," + left_top_y + "," + right_bottom_x + "," + right_bottom_y + "]]}";
-
-                var fileName = 'image_'+ progress;
-
-                downloadAnno(anno, fileName);
-                downloadImage(dataURL, fileName);
+                crashbox.push([left_top_x, left_top_y, right_bottom_x, right_bottom_y]);
             }
         }
 
@@ -245,7 +250,7 @@
         }
 
         function clearView() {
-            var i = canvas._objects.length;
+            i = canvas._objects.length;
             while(i >= 0) {
                 canvas.remove(canvas.item(i));
                 i--
@@ -259,8 +264,20 @@
                 return true
             }
         }
+        function checkbox(ltx, lty, rbx, rby) {
+            for(j = 0; j < crashbox.length; j++) {
+                var box = crashbox[j];
+
+                if (ltx > box[2] || rbx < box[0] || lty > box[1] ||rby < box[3]) {
+                    console.log("pass")
+                } else {
+                    return true;
+                }
+            }
+            return false;
+        }
         function getIntegerRandom(from, to) {
-            return Math.floor(Math.random() * (to - from)) + from;
+            return Math.floor(Math.random() * (to - from)) + from
         }
         function getRandomPosition(to) {
             return Math.random() * to
@@ -269,17 +286,17 @@
             return (Math.random() * 270) - 135
         }
         function getElementSize(imageWidth, imageHeight, width, height) {
-            var x = (width / imageWidth) * 0.2;
-            var y = (height / imageHeight) * 0.2;
+            x = (width / imageWidth) * 0.2;
+            y = (height / imageHeight) * 0.2;
 
             return (x, y);
         }
 
         function addItemList(imagePosition) {
-            var ul = document.getElementById("ul");
-            var li = document.createElement("li");
-            var children = ul.children.length + 1;
-            var img = document.createElement("img");
+            ul = document.getElementById("ul");
+            li = document.createElement("li");
+            children = ul.children.length + 1;
+            img = document.createElement("img");
 
             img.setAttribute("class", "img");
 

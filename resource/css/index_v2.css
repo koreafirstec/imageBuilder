@@ -1,0 +1,86 @@
+ul {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+ol {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+li {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* Main Css */
+.canvas {
+    width: 32rem;
+    height: 32rem;
+    border: 3px solid black;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+#drop_zone {
+    width: 22rem;
+    height: 22rem;
+    border: 3px solid gray;
+    border-radius: 0.5rem;
+}
+
+#drop_text {
+    font-size: 2rem;
+    text-align: center;
+    color: gray;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+}
+
+#list_parent {
+    border: 3px solid black;
+    display:inline-block;
+    width: 32rem;
+    padding: 0;
+}
+
+.list_group {
+    border: 3px dotted gray;
+    display:inline-block;
+    width: 30rem;
+    margin: 1rem;
+    padding: 0;
+}
+
+.list_item {
+    float: left;
+    list-style: none;
+    width: 5rem;
+    height: 5rem;
+    font-size: 2.5rem;
+    text-align: center;
+    line-height: 4.5rem;
+    padding: 1rem;
+    margin: 1rem;
+    border: 3px solid black;
+    border-radius: 0.5rem;
+}
+
+#start_button {
+    float: right;
+    width: 5rem;
+    height: 5rem;
+    font-size: 2.5rem;
+    text-align: center;
+    line-height: 4.5rem;
+    padding: 1rem;
+    margin: 1rem;
+    border: 3px solid black;
+    border-radius: 0.5rem;
+}
+.img {
+    width: 4rem;
+    height: 4rem;
+}
