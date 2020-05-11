@@ -1,5 +1,6 @@
 const {createCanvas, loadImage} = require('canvas');
 const mysql = require('mysql');
+const fs = require('fs');
 
 const canvasSize = 416;
 
@@ -19,20 +20,54 @@ module.exports.build_image = (group_id, req, res) => {
     const canvas = createCanvas(canvasSize, canvasSize);
     const ctx = canvas.getContext('2d');
 
-    //배경 로딩 함수
-    getBackground(group_id, canvas, ctx);
-    //이미지 생성 함수
-    getImage(group_id, res, canvas, ctx);
+    checkGroupIdExist(group_id, (isValid, err) => {
+        if (isValid) {
+            //배경 로딩 함수
+            getBackground(group_id, canvas, ctx);
+            //이미지 생성 함수
+            getImage(group_id, res, canvas, ctx);
+        } else {
+            if (err !== null) {
+                console.log(err);
+                res.status(500).send("an error founded");
+            } else {
+                res.status(412).send("no group founded.");
+            }
+        }
+    });
+
 };
+
+function checkGroupIdExist(group_id, callback) {
+    connection.query("select idx from tb_build_group where group_id = '" + group_id + "';", (err, result, field) => {
+        if (err) { callback(false, err) }
+        callback(result[0] !== undefined, null)
+    });
+}
 
 function getBackground(group_id, canvas, ctx) {
     connection.query("select filename from tb_build_item where TYPE = 'background' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') ORDER BY RAND() LIMIT 1;", (err, result, field) => {
         let item = result[0];
 
-        loadImage('./uploads/' + item.filename).then((background) => {
-            ctx.drawImage(background, 0, 0, canvasSize, canvasSize);
-        });
+        if (item === undefined) {
+            setBackgroundToCanvas(('./images/' + getRandomBackground()), canvasSize, ctx)
+        } else {
+            setBackgroundToCanvas(('./uploads/' + item.filename), canvasSize, ctx)
+        }
     });
+}
+
+function setBackgroundToCanvas(bgPath, canvasSize, ctx) {
+    loadImage(bgPath).then((background) => {
+        ctx.drawImage(background, 0, 0, canvasSize, canvasSize);
+    });
+}
+
+function getRandomBackground() {
+    let basicBackground = ['bg_1.jpg', 'bg_2.jpg', 'bg_3.jpg', 'bg_4.jpg'];
+    let count = Math.floor(Math.random() * 4);
+
+    return basicBackground[count];
 }
 
 function getImage(group_id, res, canvas, ctx) {
@@ -40,6 +75,10 @@ function getImage(group_id, res, canvas, ctx) {
     connection.query("select filename from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "');", (err, result, field) => {
         //에러있으면 그냥 알려줌
         if (err) { console.log(err); }
+        if (result.length < 1) {
+            res.status(412).send('no image files');
+            return ;
+        }
 
         //아이템이랑 프로미스배열 생성
         var items = [];
@@ -79,7 +118,8 @@ function getImage(group_id, res, canvas, ctx) {
         //프로미스들이 모두 작업을 끝내면
         Promise.all(promises).then(_ => {
             //반환.
-            res.send('<img src = "' + canvas.toDataURL() +'"/>')
+            // res.send('<img src = "' + canvas.toDataURL() +'"/>')
+            saveImage(canvas, group_id, res)
         })
     });
 }
@@ -127,4 +167,30 @@ function isOverlap(x,y,w,h, item) {
     if (x + w < item.x || item.x + item.width < x) {checkX = true;}
     if (y > item.y + item.height || item.y > y + h) {checkY = true;}
     return !(checkX || checkY);
+}
+
+const destination ='savedImages/';
+
+function saveImage(canvas, group_id, res) {
+    var imageData = canvas.toDataURL('image/jpeg').replace('data:image/jpeg;base64', '');
+
+    getFileCount(group_id).then(count => {
+        var buff = new Buffer(imageData, 'base64');
+        fs.writeFileSync(destination + group_id + '_' + count +'.jpeg', buff);
+    }).finally(res.send('done'));
+}
+
+function getFileCount(group_id) {
+    return new Promise((resolve, reject) => {
+        var count = 0;
+
+        fs.readdir(destination, (err, files) => {
+            files.forEach(file => {
+                if (file.includes(group_id)) {
+                    count+=1
+                }
+            });
+            resolve(count)
+        });
+    });
 }

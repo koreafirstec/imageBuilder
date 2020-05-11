@@ -58,7 +58,6 @@ function divideByGroup() {
         imageGroups.push(itemArray.items[i].images);
     }
 
-    console.log(imageGroups);
     return imageGroups;
 }
 
@@ -104,6 +103,7 @@ function setDropZone() {
         fileHandler(files)
     }
 }
+
 function fileHandler(files) {
     ([...files]).forEach((file) => {
         var reader = new FileReader();
