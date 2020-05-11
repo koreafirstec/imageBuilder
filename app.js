@@ -9,6 +9,8 @@ const fs = require('fs');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
 
+require('dotenv').config();
+
 //----------------Multer----------------
 
 const destination ='uploads/';
@@ -23,10 +25,10 @@ const upload = multer({ storage, fileFilter });
 //----------------Mysql----------------
 
 const connection = mysql.createConnection({
-    host: '172.30.1.10',
-    user: 'root',
-    password: 'root',
-    database: 'titan'
+    host: process.env.host,
+    user: process.env.userID,
+    password: process.env.passWord,
+    database: process.env.dataBase
 });
 
 //----------------Func----------------
@@ -72,7 +74,7 @@ app.get('/init', (req, res) => {
         }
         console.log(result);
     });
-    res.send(group_id);
+    res.status(200).send(JSON.parse('{ "key" : "' + group_id + '"}'));
 });
 
 //파일 업로드,
