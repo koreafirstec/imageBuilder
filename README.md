@@ -11,7 +11,7 @@ API 사용순서
 ***
 init
 ----
-  초기 
+  초기작업 
 
 * **URL**
 
@@ -57,3 +57,131 @@ init
       }
     });
   ```
+
+***
+upload
+----
+  데이터 생성을위한 기초이미지 업로드 
+
+* **URL**
+
+  /upload
+
+* **Method:**
+
+  `POST`
+  
+* **URL Params**
+
+  None
+
+* **Data Params**
+
+  group_id: [Key],
+  item_number: [number]
+  type: [image, background]
+  img: [imageFiles] // png 권장
+
+* **Success Response:**
+
+  * **Code:** 200 <br />
+    **Content:** `done`
+
+
+* **Error Response:**
+
+  * **Code:** 412 <br />
+    **Content:** `no file detected`
+
+  OR
+
+  * **Code:** 412 <br />
+    **Content:** `id dosen't exist`
+
+* **Sample Call:**
+
+* **Html:**
+  ```html
+    
+    <form method="POST" enctype="multipart/form-data" id="fileUploadForm">
+        <input type="text" name="group_id"/>
+        <input type="text" name="item_number"/>    
+        <input type="text" name="type"/>        
+        <input type="file" name="group_id"/>    
+        <input type="file" name="group_id"/>   
+        ...
+        <input type="submit" value="Submit" id="SubmitBtn">
+    </form>
+
+  ```
+
+* **JS:**
+  ```javascript
+    
+    var form = $('#fileUploadForm')[0];
+    var data = new FormData(form);
+    
+    $.ajax({
+      url: "/upload",
+      type : "POST",
+      enctype: 'multipart/form-data',
+      data: data,
+      success : function(result) {
+        console.log(result);
+      }
+    });
+    
+  ```
+
+***
+build
+----
+  초기 
+
+* **URL**
+
+  /build
+
+* **Method:**
+
+  `GET`
+  
+* **URL Params**
+
+  None
+
+* **Data Params**
+
+  group_id: [Key]
+
+* **Success Response:**
+
+  * **Code:** 200 <br />
+    **Content:** `done`
+    
+* **Error Response:**
+
+  * **Code:** 500 <br />
+    **Content:** `an error founded`
+
+  OR
+
+  * **Code:** 412 <br />
+    **Content:** `no group founded`
+    
+* **Sample Call:**
+
+  ```javascript
+    $.ajax({
+      url: "/build",
+      type : "POST",
+      data : {
+        group_id: [Key]
+      },
+      success : function(result) {
+        console.log(result);
+      }
+    });
+  ```
+
+***
