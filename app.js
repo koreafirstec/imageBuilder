@@ -19,7 +19,7 @@ const filename = (req, file, cb) => cb(null, Date.now() + "_" + file.originalnam
 const allowedImagesExts = ['jpg', 'png', 'gif', 'jpeg'];
 const fileFilter =  (req, file, cb) => cb(null, allowedImagesExts.includes(file.originalname.split('.').pop()));
 
-const storage = multer.diskStorage({ destination, filename });
+const storage = multer.diskStorage({destination, filename});
 const upload = multer({ storage, fileFilter });
 
 //----------------Mysql----------------
@@ -80,20 +80,27 @@ app.get('/init', (req, res) => {
 //파일 업로드,
 app.post('/upload', upload.array('img'), (req, res) => {
     var id = req.body.group_id;
+    var num = req.body.item_number;
     var type = req.body.type; //item, background
     var files = req.files;
 
-    connection.connect();
-    files.forEach(file => {
-        connection.query("insert into tb_build_item(group_idx, filename, TYPE) values((select idx from tb_build_group where group_id = '" + id + "'), '" + file.filename + "', '" + type + "');", (err, result, field) => {
-            if (err) {
-                console.log(err);
-            }
-            console.log(result);
-        });
+    if (!files) res.status(412).send("no file detected");
+
+    connection.query("select idx from tb_build_group where group_id = '" + id + "';", (err, result, field) => {
+        console.log(result);
+        console.log(result.length);
+        if (result.length > 0) {
+            files.forEach(file => {
+                connection.query("insert into tb_build_item(group_idx, item_number, filename, TYPE) values((select idx from tb_build_group where group_id = '" + id + "'), '"+ num +"', '" + file.filename + "', '" + type + "');", (err, result, field) => {
+                    if (err) { console.log(err) }
+                    console.log(result);
+                });
+            });
+            res.status(200).send("done");
+        } else {
+            res.status(412).send("id doesn't exist");
+        }
     });
-    connection.end();
-    res.send("done");
 });
 
 //이미지 생성 시작!

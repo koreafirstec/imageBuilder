@@ -72,7 +72,7 @@ function getRandomBackground() {
 
 function getImage(group_id, res, canvas, ctx) {
     //group_id로 파일이름 가져오는 쿼리문
-    connection.query("select filename from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "');", (err, result, field) => {
+    connection.query("select filename from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
         //에러있으면 그냥 알려줌
         if (err) { console.log(err); }
         if (result.length < 1) {
@@ -85,6 +85,8 @@ function getImage(group_id, res, canvas, ctx) {
         var promises = [];
         var cnt = 0;
 
+        console.log(result);
+
         //쿼리에서 가져온 파일이름들 foreach
         result.forEach((item) => {
             //새로운 프로미스 생성
@@ -94,7 +96,7 @@ function getImage(group_id, res, canvas, ctx) {
                 loadImage('./uploads/' + item.filename).then((image) => {
                     //랜덤 스케일 불러오기
                     let scale = getElementSize(image.width, image.height, canvas.width, canvas.height);
-                    scale = scale * (Math.random() * (2.5 - 0.5) + 0.5);
+                    scale = scale * (Math.random() * (2 - 0.5) + 0.5);
 
                     //겹치지않는 랜덤 좌표
                     let position = getRandomPosition(image.width, image.height, canvas.width, canvas.height, scale, items);
@@ -125,10 +127,10 @@ function getImage(group_id, res, canvas, ctx) {
 }
 
 function getElementSize(imageWidth, imageHeight, width, height) {
-    x = (width / imageWidth);
-    y = (height / imageHeight);
+    x = (width / imageWidth) * 0.8;
+    y = (height / imageHeight) * 0.8;
 
-    return (x * y) / 2;
+    return (x * y);
 }
 // iw : imageWidth
 // cw : canvasWidth
