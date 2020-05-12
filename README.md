@@ -77,10 +77,10 @@ upload
 
 * **Data Params**
 
-  group_id: [Key],
-  item_number: [number]
-  type: [image, background]
-  img: [imageFiles] // png 권장
+      group_id: [Key],
+      item_number: [number],
+      type: [image, background],
+      img: [imageFiles] // png 권장
 
 * **Success Response:**
 
@@ -152,7 +152,7 @@ build
 
 * **Data Params**
 
-  group_id: [Key]
+      group_id: [Key]
 
 * **Success Response:**
 
