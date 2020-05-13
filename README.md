@@ -79,6 +79,8 @@ upload
 
       group_id: [Key],
       item_number: [number],
+      shape_idx: [number],
+      item_name: [string],
       type: [image, background],
       img: [imageFiles] // png 권장
 
@@ -144,7 +146,7 @@ build
 
 * **Method:**
 
-  `GET`
+  `POST`
   
 * **URL Params**
 
@@ -152,7 +154,9 @@ build
 
 * **Data Params**
 
-      group_id: [Key]
+      group_id: [Key],
+      cycle: [number],
+      model_id: [number]
 
 * **Success Response:**
 
