@@ -15,27 +15,43 @@ const connection = mysql.createConnection({
 
 //----------------Code----------------
 
-module.exports.build_image = (group_id, req, res) => {
-    //canvas 객체 생성
-    const canvas = createCanvas(canvasSize, canvasSize);
-    const ctx = canvas.getContext('2d');
+module.exports.build_response = {
+    an_error: {
+        status: 500,
+        reason: 'An error founded.'
+    },
+    no_group: {
+        status: 412,
+        reason: 'no group_founded.'
+    },
+    no_image: {
+        status: 412,
+        reason: 'no image files.'
+    }
+};
 
-    checkGroupIdExist(group_id, (isValid, err) => {
-        if (isValid) {
-            //배경 로딩 함수
-            getBackground(group_id, canvas, ctx);
-            //이미지 생성 함수
-            getImage(group_id, res, canvas, ctx);
-        } else {
-            if (err !== null) {
-                console.log(err);
-                res.status(500).send("an error founded");
+module.exports.build_image = (group_id, cycle, model) => {
+    return new Promise(((resolve, reject) => {
+        //canvas 객체 생성
+        const canvas = createCanvas(canvasSize, canvasSize);
+        const ctx = canvas.getContext('2d');
+
+        checkGroupIdExist(group_id, (isValid, err) => {
+            if (isValid) {
+                //배경 로딩 함수
+                getBackground(group_id, canvas, ctx);
+                //이미지 생성 함수
+                getImage(group_id, resolve, reject, cycle, model, canvas, ctx);
             } else {
-                res.status(412).send("no group founded.");
+                if (err !== null) {
+                    console.log(err);
+                    reject(build_response.an_error);
+                } else {
+                    reject(build_response.no_group);
+                }
             }
-        }
-    });
-
+        });
+    }));
 };
 
 function checkGroupIdExist(group_id, callback) {
@@ -70,44 +86,63 @@ function getRandomBackground() {
     return basicBackground[count];
 }
 
-function getImage(group_id, res, canvas, ctx) {
+function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, ctx) {
     //group_id로 파일이름 가져오는 쿼리문
-    connection.query("select filename from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
+    connection.query("select filename, item_number from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
         //에러있으면 그냥 알려줌
         if (err) { console.log(err); }
         if (result.length < 1) {
-            res.status(412).send('no image files');
+            build_reject(build_response.no_image);
             return ;
         }
 
         //아이템이랑 프로미스배열 생성
-        var items = [];
+        var files = [];
+        var imageGroup = [];
+        var randomImage = [];
         var promises = [];
-        var cnt = 0;
 
-        console.log(result);
+        var itemPosition = [];
+        result.forEach((item) => {
+            // item.filename
+            // item.item_number
+            if (itemPosition.length < 1 || !itemPosition.includes(item.item_number)) {
+                itemPosition.push(item.item_number);
+            }
+
+            var itemIndex = itemPosition.indexOf(item.item_number);
+            if (imageGroup[itemIndex] === undefined) {
+                imageGroup[itemIndex] = []
+            }
+
+            imageGroup[itemIndex].push(item.filename);
+        });
+
+        imageGroup.forEach((itemArr) => {
+            randomImage.push(itemArr[Math.floor(Math.random() * itemArr.length)])
+        });
 
         //쿼리에서 가져온 파일이름들 foreach
-        result.forEach((item) => {
+        randomImage.forEach((filename) => {
             //새로운 프로미스 생성
             var promise = new Promise(((resolve, reject) => {
 
                 //이미지 불러오기
-                loadImage('./uploads/' + item.filename).then((image) => {
+                loadImage('./uploads/' + filename).then((image) => {
                     //랜덤 스케일 불러오기
                     let scale = getElementSize(image.width, image.height, canvas.width, canvas.height);
                     scale = scale * (Math.random() * (2 - 0.5) + 0.5);
 
                     //겹치지않는 랜덤 좌표
-                    let position = getRandomPosition(image.width, image.height, canvas.width, canvas.height, scale, items);
+                    let position = getRandomPosition(image.width, image.height, canvas.width, canvas.height, scale, files);
 
                     //이미지 번호 (나중에 삭제)
-                    ctx.fillText((items.length + 1) + "번째", position.x, position.y);
+                    ctx.fillText((files.length + 1) + "번째", position.x, position.y);
                     //이미지 그리기
                     ctx.drawImage(image, position.x, position.y, image.width * scale, image.height * scale);
 
                     //그린 이미지 아이템배열에 추가.
-                    items.push({x: position.x, y: position.y, width: (image.width * scale), height: (image.height * scale)});
+                    files.push({x: position.x, y: position.y, width: (image.width * scale), height: (image.height * scale)});
 
                     //프로미스 작업 완료.
                     resolve();
@@ -119,9 +154,8 @@ function getImage(group_id, res, canvas, ctx) {
         });
         //프로미스들이 모두 작업을 끝내면
         Promise.all(promises).then(_ => {
-            //반환.
-            // res.send('<img src = "' + canvas.toDataURL() +'"/>')
-            saveImage(canvas, group_id, res)
+            savePosition(files, randomImage, model);
+            saveImage(canvas, group_id, cycle, build_resolve)
         })
     });
 }
@@ -173,26 +207,35 @@ function isOverlap(x,y,w,h, item) {
 
 const destination ='savedImages/';
 
-function saveImage(canvas, group_id, res) {
-    var imageData = canvas.toDataURL('image/jpeg').replace('data:image/jpeg;base64', '');
-
-    getFileCount(group_id).then(count => {
-        var buff = new Buffer(imageData, 'base64');
-        fs.writeFileSync(destination + group_id + '_' + count +'.jpeg', buff);
-    }).finally(res.send('done'));
+function savePosition(files, images, model) {
+    for (var i = 0; i < files.length; i++) {
+        saveData(images[i], files[i], model);
+    }
 }
 
-function getFileCount(group_id) {
-    return new Promise((resolve, reject) => {
-        var count = 0;
-
-        fs.readdir(destination, (err, files) => {
-            files.forEach(file => {
-                if (file.includes(group_id)) {
-                    count+=1
-                }
-            });
-            resolve(count)
+function saveData(image, file, model) {
+    connection.query("select * from tb_build_item where filename = '" + image +"';", (err, result, field) => {
+        var data = {
+            fk_model_idx: model,
+            fk_shape_idx: result[0].shape_idx,
+            image_name: result[0].item_name,
+            xmin: file.x,
+            ymin: file.y,
+            xmax: file.x + file.width,
+            ymax: file.y + file.height
+        };
+        connection.query('insert into tb_annotation(fk_model_idx, fk_shape_idx, image_name, xmin, ymin, xmax, ymax)' +
+            'values('+ data.fk_model_idx +',' + data.fk_shape_idx +',"'+ data.image_name +'",'+ data.xmin +','+ data.ymin +','+ data.xmax +','+ data.ymax +');',(err, result, field) => {
+            if (err) { console.log(err) }
+            console.log(result);
         });
     });
+}
+
+function saveImage(canvas, group_id, cycle, resolve) {
+    var imageData = canvas.toDataURL('image/jpeg').replace('data:image/jpeg;base64', '');
+
+    var buff = new Buffer(imageData, 'base64');
+    fs.writeFileSync(destination + group_id + '_' + cycle + '.jpeg', buff);
+    resolve()
 }

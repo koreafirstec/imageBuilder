@@ -81,17 +81,19 @@ app.get('/init', (req, res) => {
 app.post('/upload', upload.array('img'), (req, res) => {
     var id = req.body.group_id;
     var num = req.body.item_number;
+
+    var shape_idx = req.body.shape_idx;
+    var item_name = req.body.item_name;
+
     var type = req.body.type; //item, background
     var files = req.files;
 
     if (!files) res.status(412).send("no file detected");
 
     connection.query("select idx from tb_build_group where group_id = '" + id + "';", (err, result, field) => {
-        console.log(result);
-        console.log(result.length);
         if (result.length > 0) {
             files.forEach(file => {
-                connection.query("insert into tb_build_item(group_idx, item_number, filename, TYPE) values((select idx from tb_build_group where group_id = '" + id + "'), '"+ num +"', '" + file.filename + "', '" + type + "');", (err, result, field) => {
+                connection.query("insert into tb_build_item(group_idx, shape_idx, item_name, item_number, filename, TYPE) values((select idx from tb_build_group where group_id = '" + id + "'), '"+ shape_idx +"', '"+ item_name +"', '"+ num +"', '" + file.filename + "', '" + type + "');", (err, result, field) => {
                     if (err) { console.log(err) }
                     console.log(result);
                 });
@@ -108,11 +110,21 @@ app.post("/build", (req, res) => {
     var id = req.body.group_id;
     // var rotateAble = req.body.rotate_able;
     // var rotateAngle = req.body.rotate_angle;
+    var cycle = req.body.cycle;
+    var model = req.body.model_id;
 
-    builder.build_image(id, req, res);
+    var promises = [];
+    for (var j = 0; j < cycle; j++) {
+        promises.push(builder.build_image(id, j, model));
+    }
+
+    Promise.all(promises).then(_ => {
+        res.status(200).send('done');
+    }).catch(err => {
+        console.log(err);
+        res.status(500).send("error")
+    })
 });
-
-
 
 app.listen(port, () => {
     console.log(`app is Listening at ${port}`);
