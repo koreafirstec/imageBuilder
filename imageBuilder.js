@@ -152,35 +152,58 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
                     var scale = 3;
                     var scaleCycle = 0;
 
-                    // while((img.width * scale) > (canvas.width / 1.25)) {
-                    //     if (scaleCycle < 50) {
-                    //         scale = getElementSize(img.width, img.height, canvas.width, canvas.height);
-                    //         scale = scale * (Math.random() * (2 - 0.5) + 0.5);
-                    //         scaleCycle += 1;
-                    //     } else {
-                    //         scale -= 0.1;
-                    //     }
-                    // }
+                    while((img.width * scale) > (canvas.width / 1.25)) {
+                        if (scaleCycle < 50) {
+                            scale = getElementSize(img.width, img.height, canvas.width, canvas.height);
+                            scale = scale * (Math.random() * (3 - 0.5) + 0.5);
+                            scaleCycle += 1;
+                        } else {
+                            scale -= 0.1;
+                        }
+                    }
 
-                    scale = getElementSize(img.width, img.height, canvas.width, canvas.height);
-                    scale = scale * (Math.random() * (2 - 0.5) + 0.5);
+                    do {
+                        //초기화
+                        clearCanvas(canvas);
 
-                    let position = rValues.getRandomPosition(img.width, img.height, canvas.width, canvas.height, scale);
+                        let position = rValues.getRandomPosition(img.width, img.height, canvas.width, canvas.height, scale);
 
-                    console.log(scale);
-                    console.log(position);
-                    console.log(img);
+                        img.set({
+                            angle: rValues.getRandomDegree(),
+                            left: position.x,
+                            top: position.y,
+                            scaleX: scale,
+                            scaleY: scale,
+                        });
 
+                        canvas.add(img);
+                    } while (
+                        isOverParent(canvas.item(0).aCoords.tl.x, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.tl.y, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.tr.x, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.tr.y, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.bl.x, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.bl.y, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.br.x, canvasSize) ||
+                        isOverParent(canvas.item(0).aCoords.br.y, canvasSize));
 
-                    img.set({
-                        // angle : degree,
-                        left : position.x,
-                        top : position.y,
-                        scaleX: scale,
-                        scaleY: scale,
-                       });
+                    let aCoords = canvas.item(0).aCoords;
+                    let leftTop = findValue(aCoords, lt);
+                    let rightBottom = findValue(aCoords, rb);
 
-                    canvas.add(img);
+                    console.log(leftTop);
+                    console.log(rightBottom);
+
+                    let stroke = new fabric.Rect({
+                        left: leftTop.x,
+                        top: leftTop.y,
+                        width: rightBottom.x - leftTop.x,
+                        height: rightBottom.y - leftTop.y,
+                        strokeWidth: 2,
+                        fill: '#00000000',
+                        stroke: "#F00"
+                    });
+                    canvas.add(stroke);
                     //겹치지않는 랜덤 좌표
 
                     //이미지 번호 (나중에 삭제)
@@ -197,7 +220,6 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
                     // let itemPoint = canvas.item(0);
 
                     //프로미스 작업 완료.
-                    console.log("resolve");
                     resolve();
                 });
             }));
@@ -212,6 +234,42 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
             saveImage(canvas, group_id, cycle, build_resolve)
         })
     });
+}
+
+const lt = 0;
+const rb = 1;
+function findValue(aCoord, type) {
+    var x,y;
+    switch (type) {
+        case lt:
+            x = getMinValue([aCoord.tl.x, aCoord.tr.x, aCoord.bl.x, aCoord.br.x]);
+            y = getMinValue([aCoord.tl.y, aCoord.tr.y, aCoord.bl.y, aCoord.br.y]);
+            break;
+        case rb:
+            x = getMaxValue([aCoord.tl.x, aCoord.tr.x, aCoord.bl.x, aCoord.br.x]);
+            y = getMaxValue([aCoord.tl.y, aCoord.tr.y, aCoord.bl.y, aCoord.br.y]);
+            break;
+    }
+    return {x: x, y: y}
+}
+
+function getMinValue(value) {
+    return Math.min.apply(null, value)
+}
+function getMaxValue(value) {
+    return Math.max.apply(null, value)
+}
+
+function clearCanvas(canvas) {
+    var i = canvas._objects.length;
+    while(i >= 0) {
+        canvas.remove(canvas.item(i));
+        i--
+    }
+}
+
+function isOverParent(value, parentSize) {
+    return !(value > 0 && value < parentSize);
 }
 
 function getElementSize(imageWidth, imageHeight, width, height) {

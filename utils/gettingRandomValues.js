@@ -50,4 +50,8 @@ function isOverlap(x,y,w,h, item) {
     return !(checkX || checkY);
 }
 
-module.exports = { getRandomPosition, getRandomPositions };
+function getRandomDegree() {
+    return ((Math.random() * 180) * Math.PI)
+}
+
+module.exports = { getRandomPosition, getRandomPositions, getRandomDegree };
