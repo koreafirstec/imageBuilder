@@ -228,7 +228,7 @@
         }
 
         function downloadAnno(text, fileName) {
-            var file = new Blob([text], {type: 'text/plain'});
+              var file = new Blob([text], {type: 'text/plain'});
 
             const link = document.createElement('a');
             link.download = fileName +'.anno';

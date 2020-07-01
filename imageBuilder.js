@@ -1,4 +1,7 @@
+
 const {createCanvas, loadImage} = require('canvas');
+const rValues = require('./utils/gettingRandomValues');
+const fabric = require('fabric').fabric;
 const mysql = require('mysql');
 const fs = require('fs');
 
@@ -33,15 +36,22 @@ module.exports.build_response = {
 module.exports.build_image = (group_id, cycle, model) => {
     return new Promise(((resolve, reject) => {
         //canvas 객체 생성
-        const canvas = createCanvas(canvasSize, canvasSize);
+        const canvas = new fabric.StaticCanvas('canvas', {
+            width: canvasSize,
+            height: canvasSize,
+        });
+
         const ctx = canvas.getContext('2d');
 
         checkGroupIdExist(group_id, (isValid, err) => {
             if (isValid) {
                 //배경 로딩 함수
-                getBackground(group_id, canvas, ctx);
+                new Promise(((resolve, reject) => {
+                    getBackground(group_id, canvas, resolve);
+                })).then(_ => {
+                    getImage(group_id, resolve, reject, cycle, model, canvas);
+                });
                 //이미지 생성 함수
-                getImage(group_id, resolve, reject, cycle, model, canvas, ctx);
             } else {
                 if (err !== null) {
                     console.log(err);
@@ -61,21 +71,29 @@ function checkGroupIdExist(group_id, callback) {
     });
 }
 
-function getBackground(group_id, canvas, ctx) {
+function getBackground(group_id, canvas, resolve) {
     connection.query("select filename from tb_build_item where TYPE = 'background' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') ORDER BY RAND() LIMIT 1;", (err, result, field) => {
         let item = result[0];
 
         if (item === undefined) {
-            setBackgroundToCanvas(('./images/' + getRandomBackground()), canvasSize, ctx)
+            setBackgroundToCanvas(('file://'+ __dirname + '/images/' + getRandomBackground()), canvas, resolve)
         } else {
-            setBackgroundToCanvas(('./uploads/' + item.filename), canvasSize, ctx)
+            setBackgroundToCanvas(('file://'+ __dirname + '/uploads/' + item.filename), canvas, resolve)
         }
     });
 }
 
-function setBackgroundToCanvas(bgPath, canvasSize, ctx) {
-    loadImage(bgPath).then((background) => {
-        ctx.drawImage(background, 0, 0, canvasSize, canvasSize);
+function setBackgroundToCanvas(bgPath, canvas, resolve) {
+    fabric.Image.fromURL(bgPath, (bg) => {
+        bg.set({
+            top: 0,
+            left: 0,
+            scaleX: canvas.width / bg.width,
+            scaleY: canvas.height / bg.height,
+        });
+
+        canvas.setBackgroundImage(bg);
+        resolve();
     });
 }
 
@@ -86,7 +104,7 @@ function getRandomBackground() {
     return basicBackground[count];
 }
 
-function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, ctx) {
+function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
     //group_id로 파일이름 가져오는 쿼리문
     connection.query("select filename, item_number from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
         //에러있으면 그냥 알려줌
@@ -97,7 +115,7 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
         }
 
         //아이템이랑 프로미스배열 생성
-        var files = [];
+        // var files = []; 다중이미지를 위해 선언되었으나 필요없어졌으니 보류
         var imageGroup = [];
         var randomImage = [];
         var promises = [];
@@ -128,23 +146,58 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
             var promise = new Promise(((resolve, reject) => {
 
                 //이미지 불러오기
-                loadImage('./uploads/' + filename).then((image) => {
+                fabric.Image.fromURL(('file://' + __dirname + '/uploads/' + filename), (img) => {
                     //랜덤 스케일 불러오기
-                    let scale = getElementSize(image.width, image.height, canvas.width, canvas.height);
+
+                    var scale = 3;
+                    var scaleCycle = 0;
+
+                    // while((img.width * scale) > (canvas.width / 1.25)) {
+                    //     if (scaleCycle < 50) {
+                    //         scale = getElementSize(img.width, img.height, canvas.width, canvas.height);
+                    //         scale = scale * (Math.random() * (2 - 0.5) + 0.5);
+                    //         scaleCycle += 1;
+                    //     } else {
+                    //         scale -= 0.1;
+                    //     }
+                    // }
+
+                    scale = getElementSize(img.width, img.height, canvas.width, canvas.height);
                     scale = scale * (Math.random() * (2 - 0.5) + 0.5);
 
+                    let position = rValues.getRandomPosition(img.width, img.height, canvas.width, canvas.height, scale);
+
+                    console.log(scale);
+                    console.log(position);
+                    console.log(img);
+
+
+                    img.set({
+                        // angle : degree,
+                        left : position.x,
+                        top : position.y,
+                        scaleX: scale,
+                        scaleY: scale,
+                       });
+
+                    canvas.add(img);
                     //겹치지않는 랜덤 좌표
-                    let position = getRandomPosition(image.width, image.height, canvas.width, canvas.height, scale, files);
 
                     //이미지 번호 (나중에 삭제)
-                    ctx.fillText((files.length + 1) + "번째", position.x, position.y);
+                    // ctx.fillText((files.length + 1) + "번째", position.x, position.y);
                     //이미지 그리기
-                    ctx.drawImage(image, position.x, position.y, image.width * scale, image.height * scale);
+                    // ctx.drawImage(image, position.x, position.y, image.width * scale, image.height * scale);
+
+                    // ctx.strokeStyle="#F00";
+                    // ctx.strokeRect(position.x, position.y, (image.width * scale), (image.height * scale));
 
                     //그린 이미지 아이템배열에 추가.
-                    files.push({x: position.x, y: position.y, width: (image.width * scale), height: (image.height * scale)});
+                    // files.push({x: position.x, y: position.y, width: (image.width * scale), height: (image.height * scale)});
+                    //
+                    // let itemPoint = canvas.item(0);
 
                     //프로미스 작업 완료.
+                    console.log("resolve");
                     resolve();
                 });
             }));
@@ -154,7 +207,8 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
         });
         //프로미스들이 모두 작업을 끝내면
         Promise.all(promises).then(_ => {
-            savePosition(files, randomImage, model);
+            console.log("work");
+            // savePosition(files, randomImage, model, cycle);
             saveImage(canvas, group_id, cycle, build_resolve)
         })
     });
@@ -166,76 +220,48 @@ function getElementSize(imageWidth, imageHeight, width, height) {
 
     return (x * y);
 }
-// iw : imageWidth
-// cw : canvasWidth
-
-function getRandomPosition(iw, ih, cw, ch, scale, items) {
-    var check = true;
-    var x, y;
-    var rollCount = 0;
-
-    //아이템이 겹치지 않으면 check = false; 겹치면 true
-    while(check && (rollCount < 300)) {
-         //랜덤 xy 좌표값 아이템 스케일이랑 캔버스 크기에 맞춰서 생성
-         x = Math.floor(Math.random() * (cw - (iw * scale)));
-         y = Math.floor(Math.random() * (ch - (ih * scale)));
-
-        var overlapped = false;
-        //지금까지 그려져있는 모든 아이템 비교
-        items.forEach(item => {
-            if (overlapped !== true) {
-                overlapped = isOverlap(x, y, iw * scale, ih * scale, item);
-            }
-        });
-
-        //겹침에따라 바뀜
-        check = overlapped;
-        rollCount++;
-    }
-    //겹치지 않는 좌표값일경우 반환
-    return {x: x, y: y}
-}
-
-// 겹침 판단!
-function isOverlap(x,y,w,h, item) {
-    var checkX = false,checkY = false;
-
-    if (x + w < item.x || item.x + item.width < x) {checkX = true;}
-    if (y > item.y + item.height || item.y > y + h) {checkY = true;}
-    return !(checkX || checkY);
-}
 
 const destination ='savedImages/';
 
-function savePosition(files, images, model) {
+function savePosition(files, images, model, cycle) {
     for (var i = 0; i < files.length; i++) {
-        saveData(images[i], files[i], model);
+        saveData(images[i], files[i], model, cycle);
     }
 }
 
-function saveData(image, file, model) {
+function saveData(image, file, model, cycle) {
     connection.query("select * from tb_build_item where filename = '" + image +"';", (err, result, field) => {
         var data = {
             fk_model_idx: model,
             fk_shape_idx: result[0].shape_idx,
-            image_name: result[0].item_name,
+            image_name: 8,
+            // image_name: result[0].item_name,
             xmin: file.x,
             ymin: file.y,
             xmax: file.x + file.width,
             ymax: file.y + file.height
         };
         connection.query('insert into tb_annotation(fk_model_idx, fk_shape_idx, image_name, xmin, ymin, xmax, ymax)' +
-            'values('+ data.fk_model_idx +',' + data.fk_shape_idx +',"'+ data.image_name +'",'+ data.xmin +','+ data.ymin +','+ data.xmax +','+ data.ymax +');',(err, result, field) => {
+            'values('+ data.fk_model_idx +',' + data.fk_shape_idx +',"'+ data.image_name +'_'+ ( cycle + 1 ) +'",'+ data.xmin +','+ data.ymin +','+ data.xmax +','+ data.ymax +');',(err, result, field) => {
             if (err) { console.log(err) }
             console.log(result);
-        });
+        }) ;
     });
 }
 
+
 function saveImage(canvas, group_id, cycle, resolve) {
-    var imageData = canvas.toDataURL('image/jpeg').replace('data:image/jpeg;base64', '');
+    const imageData = canvas.toDataURL({
+        width: canvas.width,
+        height: canvas.height,
+        left: 0,
+        top: 0,
+        format: 'png',
+    }).replace('data:image/png;base64', '');
+
+    // var imageData = canvas.('image/jpeg').replace('data:image/jpeg;base64', '');
 
     var buff = new Buffer(imageData, 'base64');
-    fs.writeFileSync(destination + group_id + '_' + cycle + '.jpeg', buff);
+    fs.writeFileSync(destination  + 'test_' + ( cycle + 1 ) + '.png', buff);
     resolve()
 }

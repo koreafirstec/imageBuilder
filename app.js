@@ -3,6 +3,7 @@ const builder = require('./imageBuilder');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const cors = require('cors');
 
 const multer = require('multer');
 const fs = require('fs');
@@ -13,6 +14,7 @@ require('dotenv').config();
 
 //----------------Multer----------------
 
+//Only English
 const destination ='uploads/';
 const filename = (req, file, cb) => cb(null, Date.now() + "_" + file.originalname);
 
@@ -47,8 +49,9 @@ app.use(express.static(__dirname + '/resource'));
 
 app.use(bodyParser.urlencoded({extended:true}));
 app.use(bodyParser.json());
+app.use(cors());
 
-//옛날 화면 (쓰레기)
+//옛날 화면
 app.get('/', (req, res) => {
     fs.readFile('resource/index.html', (err, data) => {
         res.writeHead(200, {'Content-Type':'text/html'});
@@ -88,7 +91,12 @@ app.post('/upload', upload.array('img'), (req, res) => {
     var type = req.body.type; //item, background
     var files = req.files;
 
-    if (!files) res.status(412).send("no file detected");
+    console.log(req);
+
+    if (!files) {
+        res.status(412).send("no file detected");
+        return;
+    }
 
     connection.query("select idx from tb_build_group where group_id = '" + id + "';", (err, result, field) => {
         if (result.length > 0) {
@@ -100,6 +108,7 @@ app.post('/upload', upload.array('img'), (req, res) => {
             });
             res.status(200).send("done");
         } else {
+            console.log("else");
             res.status(412).send("id doesn't exist");
         }
     });
