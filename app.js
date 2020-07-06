@@ -15,13 +15,13 @@ require('dotenv').config();
 //----------------Multer----------------
 
 //Only English
-const destination ='uploads/';
+const uploadDir = process.env.uploadedImagesDir;
 const filename = (req, file, cb) => cb(null, Date.now() + "_" + file.originalname);
 
 const allowedImagesExts = ['jpg', 'png', 'gif', 'jpeg'];
 const fileFilter =  (req, file, cb) => cb(null, allowedImagesExts.includes(file.originalname.split('.').pop()));
 
-const storage = multer.diskStorage({destination, filename});
+const storage = multer.diskStorage({uploadDir, filename});
 const upload = multer({ storage, fileFilter });
 
 //----------------Mysql----------------
@@ -30,7 +30,9 @@ const connection = mysql.createConnection({
     host: process.env.host,
     user: process.env.userID,
     password: process.env.passWord,
-    database: process.env.dataBase
+    database: process.env.dataBase,
+    port: process.env.dbPort,
+    connectionTimeout: 360000
 });
 
 //----------------Func----------------
@@ -41,6 +43,87 @@ function build_uuid() {
         return v.toString(16);
     });
 }
+
+function buildGroup(id, nowCycle, cycle, model) {
+    if (nowCycle < cycle) {
+        builder.build_image(id, nowCycle, model, connection)
+            .then(() => {
+                buildGroup(id, nowCycle + 1, cycle, model)
+            });
+    }
+}
+// 1.이미지 확인, 2. 이미지 제거, 388.db값 제거
+async function deleteGroup(group_id, callback) {
+
+    try {
+        const filenames = await getFilenames(group_id);
+
+        console.log(filenames);
+
+        for(var i in filenames) {
+            console.log("nowFile : " + filenames[i]);
+            await deleteFile(filenames[i]);
+        }
+        callback(true);
+    } catch (e) {
+        console.log(e);
+        callback(false);
+    }
+}
+
+async function getFilenames(group_id) {
+    try {
+        const items = await new Promise((resolve, reject) => {
+            connection.query("select filename from tb_build_item where group_idx = (select idx from tb_build_group where group_id = '" + group_id + "');", (err, result, fields) => {
+                if (err) {
+                    reject(err);
+                }
+
+                var array = [];
+                result.forEach(item => {
+                    array.push(item.filename)
+                });
+
+                resolve(array);
+            });
+        });
+        await connection.commit();
+
+        return items;
+    } catch (e) {
+        throw Error("no items");
+    }
+}
+
+async function deleteFile(filename) {
+    await connection.beginTransaction();
+    try {
+        await connection.query("delete from tb_build_item where filename = '" + filename + "';");
+        await connection.commit();
+
+        fs.unlink(uploadDir + filename, (err) => {
+            if (err) throw new Error('file delete failed : ' + err)
+        });
+    } catch (e) {
+        console.log(e);
+        connection.rollback();
+    }
+}
+
+function checkGroupIdExist(group_id, callback) {
+    console.log(group_id);
+    connection.query("select idx from tb_build_group where group_id = '" + group_id + "';", (err, result, field) => {
+        if (err) { callback(false, err) }
+
+        console.log(result[0]);
+        callback(result[0] !== undefined, null)
+    });
+}
+
+
+app.listen(port, () => {
+    console.log(`app is Listening at ${port}`);
+});
 
 //----------------Code----------------
 
@@ -91,8 +174,6 @@ app.post('/upload', upload.array('img'), (req, res) => {
     var type = req.body.type; //item, background
     var files = req.files;
 
-    console.log(req);
-
     if (!files) {
         res.status(412).send("no file detected");
         return;
@@ -123,18 +204,36 @@ app.post("/build", (req, res) => {
     var model = req.body.model_id;
 
     var promises = [];
-    for (var j = 0; j < cycle; j++) {
-        promises.push(builder.build_image(id, j, model));
-    }
+    checkGroupIdExist(id, (isValid, err) => {
+        if (isValid) {
+            buildGroup(id, 0, cycle, model);
+        } else {
+            if (err !== null) {
+                console.log(err);
+            } else {
+                console.log("unknown error");
+            }
+            res.status(500).send('error founded');
+        }
+    });
 
-    Promise.all(promises).then(_ => {
-        res.status(200).send('done');
-    }).catch(err => {
-        console.log(err);
-        res.status(500).send("error")
-    })
+    res.status(200).send('done');
 });
 
-app.listen(port, () => {
-    console.log(`app is Listening at ${port}`);
+app.delete("/delete", (req, res) => {
+   var id = req.body.group_id;
+
+   checkGroupIdExist(id, (isValid, err) => {
+      if (isValid) {
+          deleteGroup(id, (done, err) => {
+              if (done) {
+                  res.status(200).send("deleted");
+              } else {
+                  res.status(500).send('error founded : ' + err);
+              }
+          });
+      } else {
+          res.status(500).send('error founded : ' + err);
+      }
+   });
 });

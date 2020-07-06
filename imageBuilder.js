@@ -7,14 +7,13 @@ const fs = require('fs');
 
 const canvasSize = 416;
 
-//----------------Mysql----------------
+require('dotenv').config();
 
-const connection = mysql.createConnection({
-    host: '172.30.1.10',
-    user: 'root',
-    password: 'root',
-    database: 'titan'
+const canvas = new fabric.Canvas('canvas', {
+    width: canvasSize,
+    height: canvasSize,
 });
+const destination = process.env.generatedImagesDir;
 
 //----------------Code----------------
 
@@ -33,45 +32,19 @@ module.exports.build_response = {
     }
 };
 
-module.exports.build_image = (group_id, cycle, model) => {
-    return new Promise(((resolve, reject) => {
+module.exports.build_image = (group_id, cycle, model, connection) => {
+    console.log("hello" + cycle + ";;");
+    return new Promise((resolved, reject) => {
         //canvas 객체 생성
-        const canvas = new fabric.StaticCanvas('canvas', {
-            width: canvasSize,
-            height: canvasSize,
+        new Promise((resolve, reject) => {
+            getBackground(group_id, canvas, resolve, connection);
+        }).then(_ => {
+            getImage(group_id, resolved, reject, cycle, model, canvas, connection);
         });
-
-        const ctx = canvas.getContext('2d');
-
-        checkGroupIdExist(group_id, (isValid, err) => {
-            if (isValid) {
-                //배경 로딩 함수
-                new Promise(((resolve, reject) => {
-                    getBackground(group_id, canvas, resolve);
-                })).then(_ => {
-                    getImage(group_id, resolve, reject, cycle, model, canvas);
-                });
-                //이미지 생성 함수
-            } else {
-                if (err !== null) {
-                    console.log(err);
-                    reject(build_response.an_error);
-                } else {
-                    reject(build_response.no_group);
-                }
-            }
-        });
-    }));
+    })
 };
 
-function checkGroupIdExist(group_id, callback) {
-    connection.query("select idx from tb_build_group where group_id = '" + group_id + "';", (err, result, field) => {
-        if (err) { callback(false, err) }
-        callback(result[0] !== undefined, null)
-    });
-}
-
-function getBackground(group_id, canvas, resolve) {
+function getBackground(group_id, canvas, resolve, connection) {
     connection.query("select filename from tb_build_item where TYPE = 'background' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') ORDER BY RAND() LIMIT 1;", (err, result, field) => {
         let item = result[0];
 
@@ -104,7 +77,7 @@ function getRandomBackground() {
     return basicBackground[count];
 }
 
-function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
+function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, connection) {
     //group_id로 파일이름 가져오는 쿼리문
     connection.query("select filename, item_number from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
         //에러있으면 그냥 알려줌
@@ -115,7 +88,7 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
         }
 
         //아이템이랑 프로미스배열 생성
-        // var files = []; 다중이미지를 위해 선언되었으나 필요없어졌으니 보류
+        var points = [];
         var imageGroup = [];
         var randomImage = [];
         var promises = [];
@@ -143,7 +116,7 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
         //쿼리에서 가져온 파일이름들 foreach
         randomImage.forEach((filename) => {
             //새로운 프로미스 생성
-            var promise = new Promise(((resolve, reject) => {
+            var promise = new Promise((resolve, reject) => {
 
                 //이미지 불러오기
                 fabric.Image.fromURL(('file://' + __dirname + '/uploads/' + filename), (img) => {
@@ -153,9 +126,9 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
                     var scaleCycle = 0;
 
                     while((img.width * scale) > (canvas.width / 1.25)) {
-                        if (scaleCycle < 50) {
+                        if (scaleCycle < 20) {
                             scale = getElementSize(img.width, img.height, canvas.width, canvas.height);
-                            scale = scale * (Math.random() * (3 - 0.5) + 0.5);
+                            scale = scale * (Math.random() * (3 - 0.25) + 0.25);
                             scaleCycle += 1;
                         } else {
                             scale -= 0.1;
@@ -185,54 +158,41 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas) {
                         isOverParent(canvas.item(0).aCoords.bl.x, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.bl.y, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.br.x, canvasSize) ||
-                        isOverParent(canvas.item(0).aCoords.br.y, canvasSize));
+                        isOverParent(canvas.item(0).aCoords.br.y , canvasSize));
 
                     let aCoords = canvas.item(0).aCoords;
                     let leftTop = findValue(aCoords, lt);
                     let rightBottom = findValue(aCoords, rb);
 
-                    console.log(leftTop);
-                    console.log(rightBottom);
+                    // 이미지 좌표 확인용
+                    // let stroke = new fabric.Rect({
+                    //     left: leftTop.x,
+                    //     top: leftTop.y,
+                    //     width: rightBottom.x - leftTop.x,
+                    //     height: rightBottom.y - leftTop.y,
+                    //     strokeWidth: 2,
+                    //     fill: '#00000000',
+                    //     stroke: "#F00"
+                    // });
+                    // canvas.add(stroke);
+                    points.push({ltx: leftTop.x, lty: leftTop.y, rbx: rightBottom.x, rby: rightBottom.y});
 
-                    let stroke = new fabric.Rect({
-                        left: leftTop.x,
-                        top: leftTop.y,
-                        width: rightBottom.x - leftTop.x,
-                        height: rightBottom.y - leftTop.y,
-                        strokeWidth: 2,
-                        fill: '#00000000',
-                        stroke: "#F00"
-                    });
-                    canvas.add(stroke);
-                    //겹치지않는 랜덤 좌표
-
-                    //이미지 번호 (나중에 삭제)
-                    // ctx.fillText((files.length + 1) + "번째", position.x, position.y);
-                    //이미지 그리기
-                    // ctx.drawImage(image, position.x, position.y, image.width * scale, image.height * scale);
-
-                    // ctx.strokeStyle="#F00";
-                    // ctx.strokeRect(position.x, position.y, (image.width * scale), (image.height * scale));
-
-                    //그린 이미지 아이템배열에 추가.
-                    // files.push({x: position.x, y: position.y, width: (image.width * scale), height: (image.height * scale)});
-                    //
-                    // let itemPoint = canvas.item(0);
-
-                    //프로미스 작업 완료.
                     resolve();
                 });
-            }));
+            });
 
             //프로미스 배열에 추가
             promises.push(promise)
         });
         //프로미스들이 모두 작업을 끝내면
         Promise.all(promises).then(_ => {
-            console.log("work");
-            // savePosition(files, randomImage, model, cycle);
+            savePosition(points, randomImage, model, cycle, connection);
             saveImage(canvas, group_id, cycle, build_resolve)
-        })
+        }).then(_ => {
+            // promises.forEach(promise => {
+                // promise.clear()
+            // })
+        });
     });
 }
 
@@ -279,25 +239,23 @@ function getElementSize(imageWidth, imageHeight, width, height) {
     return (x * y);
 }
 
-const destination ='savedImages/';
-
-function savePosition(files, images, model, cycle) {
+function savePosition(files, images, model, cycle, connection) {
     for (var i = 0; i < files.length; i++) {
-        saveData(images[i], files[i], model, cycle);
+        saveData(images[i], files[i], model, cycle, connection);
     }
 }
 
-function saveData(image, file, model, cycle) {
+function saveData(image, file, model, cycle, connection) {
     connection.query("select * from tb_build_item where filename = '" + image +"';", (err, result, field) => {
         var data = {
             fk_model_idx: model,
             fk_shape_idx: result[0].shape_idx,
-            image_name: 8,
+            image_name: '9',
             // image_name: result[0].item_name,
-            xmin: file.x,
-            ymin: file.y,
-            xmax: file.x + file.width,
-            ymax: file.y + file.height
+            xmin: file.ltx,
+            ymin: file.lty,
+            xmax: file.rbx,
+            ymax: file.rby
         };
         connection.query('insert into tb_annotation(fk_model_idx, fk_shape_idx, image_name, xmin, ymin, xmax, ymax)' +
             'values('+ data.fk_model_idx +',' + data.fk_shape_idx +',"'+ data.image_name +'_'+ ( cycle + 1 ) +'",'+ data.xmin +','+ data.ymin +','+ data.xmax +','+ data.ymax +');',(err, result, field) => {
@@ -317,9 +275,8 @@ function saveImage(canvas, group_id, cycle, resolve) {
         format: 'png',
     }).replace('data:image/png;base64', '');
 
-    // var imageData = canvas.('image/jpeg').replace('data:image/jpeg;base64', '');
-
     var buff = new Buffer(imageData, 'base64');
-    fs.writeFileSync(destination  + 'test_' + ( cycle + 1 ) + '.png', buff);
+    fs.writeFileSync(destination + 9 + '_' + ( cycle + 1 ) + '.png', buff);
+
     resolve()
 }
