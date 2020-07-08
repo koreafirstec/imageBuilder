@@ -250,7 +250,7 @@ function saveData(image, file, model, cycle, connection) {
         var data = {
             fk_model_idx: model,
             fk_shape_idx: result[0].shape_idx,
-            image_name: '9',
+            image_name: '10',
             // image_name: result[0].item_name,
             xmin: file.ltx,
             ymin: file.lty,
@@ -276,7 +276,7 @@ function saveImage(canvas, group_id, cycle, resolve) {
     }).replace('data:image/png;base64', '');
 
     var buff = new Buffer(imageData, 'base64');
-    fs.writeFileSync(destination + 9 + '_' + ( cycle + 1 ) + '.png', buff);
+    fs.writeFileSync(destination + 10 + '_' + ( cycle + 1 ) + '.png', buff);
 
     resolve()
 }
