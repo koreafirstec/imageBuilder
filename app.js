@@ -15,13 +15,13 @@ require('dotenv').config();
 //----------------Multer----------------
 
 //Only English
-const uploadDir = process.env.uploadedImagesDir;
+const destination = 'uploads/';
 const filename = (req, file, cb) => cb(null, Date.now() + "_" + file.originalname);
 
 const allowedImagesExts = ['jpg', 'png', 'gif', 'jpeg'];
 const fileFilter =  (req, file, cb) => cb(null, allowedImagesExts.includes(file.originalname.split('.').pop()));
 
-const storage = multer.diskStorage({uploadDir, filename});
+const storage = multer.diskStorage({destination, filename});
 const upload = multer({ storage, fileFilter });
 
 //----------------Mysql----------------
@@ -44,24 +44,22 @@ function build_uuid() {
     });
 }
 
-function buildGroup(id, nowCycle, cycle, model) {
+async function buildGroup(id, name, nowCycle, cycle, model) {
+    // console.log("cycle : " + cycle + ", now : " + nowCycle);
+    // console.log("value : " + (nowCycle < cycle) );
     if (nowCycle < cycle) {
-        builder.build_image(id, nowCycle, model, connection)
-            .then(() => {
-                buildGroup(id, nowCycle + 1, cycle, model)
+        await builder.build_image(id, name, nowCycle, model, connection)
+            .then(_ => {
+                buildGroup(id, name, nowCycle + 1, cycle, model)
             });
     }
 }
 // 1.이미지 확인, 2. 이미지 제거, 388.db값 제거
 async function deleteGroup(group_id, callback) {
-
     try {
         const filenames = await getFilenames(group_id);
 
-        console.log(filenames);
-
         for(var i in filenames) {
-            console.log("nowFile : " + filenames[i]);
             await deleteFile(filenames[i]);
         }
         callback(true);
@@ -111,15 +109,43 @@ async function deleteFile(filename) {
 }
 
 function checkGroupIdExist(group_id, callback) {
-    console.log(group_id);
     connection.query("select idx from tb_build_group where group_id = '" + group_id + "';", (err, result, field) => {
         if (err) { callback(false, err) }
 
-        console.log(result[0]);
         callback(result[0] !== undefined, null)
     });
 }
 
+async function getItemNameByGroupId(group_id) {
+    return new Promise(((resolve, reject) => {
+        var query = "select distinct item_name from tb_build_item where group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') and type = 'item';";
+
+        connection.query(query, (err, result, fields) => {
+            if (err) { console.log(err) }
+            //일단 제일 마지막 이름으로 호출
+            resolve(result[result.length - 1].item_name);
+        })
+    }))
+}
+
+async function setProcess(group_id, cycle) {
+    connection.query("select group_idx from tb_build_process where group_idx = (select idx from tb_build_group where group_id = '" + group_id + "')", (err, result, fields) => {
+       if (err) {console.log(err) }
+       console.log(result);
+       if (result.length > 0) {
+           connection.query("update tb_build_process set max_value = '" + cycle + "', process = 0 where group_idx = '" + result[0].group_idx + "';", (err, result, fields) => {
+               if (err) {console.log(err)}
+               console.log("itemUpdated")
+           })
+       } else {
+           connection.query("insert into tb_build_process (group_idx, max_value) values((select idx from tb_build_group where group_id = '" + group_id + "'), " + cycle + ")", (err, result, fields) => {
+               // 일단 콘솔로만 나중에 에러처리
+               if (err) { console.log(err) }
+               console.log("itemInserted")
+           })
+       }
+    });
+}
 
 app.listen(port, () => {
     console.log(`app is Listening at ${port}`);
@@ -204,16 +230,25 @@ app.post("/build", (req, res) => {
     var model = req.body.model_id;
 
     var promises = [];
-    checkGroupIdExist(id, (isValid, err) => {
+
+    console.log("hello");
+    console.log("id    : " + id);
+    console.log("cycle : " + cycle);
+    console.log("model : " + model);
+
+    checkGroupIdExist(id, async (isValid, err) => {
         if (isValid) {
-            buildGroup(id, 0, cycle, model);
+            await setProcess(id, cycle);
+
+            var name = await getItemNameByGroupId(id);
+            buildGroup(id, name, 0, cycle, model);
         } else {
             if (err !== null) {
                 console.log(err);
             } else {
                 console.log("unknown error");
             }
-            res.status(500).send('error founded');
+            console.log("error!!");
         }
     });
 

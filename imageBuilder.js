@@ -32,14 +32,15 @@ module.exports.build_response = {
     }
 };
 
-module.exports.build_image = (group_id, cycle, model, connection) => {
-    console.log("hello" + cycle + ";;");
+module.exports.build_image = (group_id, item_name, cycle, model, connection) => {
     return new Promise((resolved, reject) => {
         //canvas 객체 생성
         new Promise((resolve, reject) => {
             getBackground(group_id, canvas, resolve, connection);
+            getImage(group_id, item_name, resolved, reject, cycle, model, canvas, connection);
         }).then(_ => {
-            getImage(group_id, resolved, reject, cycle, model, canvas, connection);
+            // console.log("updateProcess");
+            updateProcess(group_id, cycle, connection);
         });
     })
 };
@@ -77,12 +78,13 @@ function getRandomBackground() {
     return basicBackground[count];
 }
 
-function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, connection) {
+function getImage(group_id, item_name, build_resolve, build_reject, cycle, model, canvas, connection) {
     //group_id로 파일이름 가져오는 쿼리문
     connection.query("select filename, item_number from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
         //에러있으면 그냥 알려줌
         if (err) { console.log(err); }
         if (result.length < 1) {
+            console.log("reject");
             build_reject(build_response.no_image);
             return ;
         }
@@ -135,11 +137,17 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
                         }
                     }
 
+                    var roop = 0;
+                    var position;
                     do {
                         //초기화
                         clearCanvas(canvas);
 
-                        let position = rValues.getRandomPosition(img.width, img.height, canvas.width, canvas.height, scale);
+                        if (roop > 50) {
+                            scale = 0.3
+                        }
+
+                        position = rValues.getRandomPosition(img.width, img.height, canvas.width, canvas.height, scale);
 
                         img.set({
                             angle: rValues.getRandomDegree(),
@@ -150,6 +158,16 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
                         });
 
                         canvas.add(img);
+                        roop += 1;
+                        //
+                        // console.log("test : " + roop);
+                        // if (roop % 10 === 0) {
+                        //     console.log("x : " + canvas.item(0).aCoords.tl.x);
+                        //     console.log("y : " + canvas.item(0).aCoords.tl.y);
+                        //     console.log("w : " + canvas.item(0).aCoords.br.x);
+                        //     console.log("h : " + canvas.item(0).aCoords.br.y);
+                        // }
+
                     } while (
                         isOverParent(canvas.item(0).aCoords.tl.x, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.tl.y, canvasSize) ||
@@ -159,6 +177,8 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
                         isOverParent(canvas.item(0).aCoords.bl.y, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.br.x, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.br.y , canvasSize));
+
+                    // console.log("pass");
 
                     let aCoords = canvas.item(0).aCoords;
                     let leftTop = findValue(aCoords, lt);
@@ -186,12 +206,8 @@ function getImage(group_id, build_resolve, build_reject, cycle, model, canvas, c
         });
         //프로미스들이 모두 작업을 끝내면
         Promise.all(promises).then(_ => {
-            savePosition(points, randomImage, model, cycle, connection);
-            saveImage(canvas, group_id, cycle, build_resolve)
-        }).then(_ => {
-            // promises.forEach(promise => {
-                // promise.clear()
-            // })
+            savePosition(points, item_name, randomImage, model, cycle, connection);
+            saveImage(canvas, group_id, item_name, cycle, build_resolve)
         });
     });
 }
@@ -239,44 +255,52 @@ function getElementSize(imageWidth, imageHeight, width, height) {
     return (x * y);
 }
 
-function savePosition(files, images, model, cycle, connection) {
+function savePosition(files, item_name, images, model, cycle, connection) {
     for (var i = 0; i < files.length; i++) {
-        saveData(images[i], files[i], model, cycle, connection);
+        saveData(images[i], item_name, files[i], model, cycle, connection);
     }
 }
 
-function saveData(image, file, model, cycle, connection) {
+function updateProcess(group_id, process, connection) {
+    connection.query("update tb_build_process set process = '" + (process + 1) + "' where group_idx = (select idx from tb_build_group where group_id = '" + group_id + "')", (err, result, field) => {
+        if (err) { console.log(err); }
+        console.log("process updated : " + (process + 1))
+    });
+}
+
+function saveData(image, item_name, file, model, cycle, connection) {
     connection.query("select * from tb_build_item where filename = '" + image +"';", (err, result, field) => {
         var data = {
             fk_model_idx: model,
             fk_shape_idx: result[0].shape_idx,
-            image_name: '10',
+            image_name: 'item_name',
             // image_name: result[0].item_name,
             xmin: file.ltx,
             ymin: file.lty,
             xmax: file.rbx,
             ymax: file.rby
         };
+
         connection.query('insert into tb_annotation(fk_model_idx, fk_shape_idx, image_name, xmin, ymin, xmax, ymax)' +
             'values('+ data.fk_model_idx +',' + data.fk_shape_idx +',"'+ data.image_name +'_'+ ( cycle + 1 ) +'",'+ data.xmin +','+ data.ymin +','+ data.xmax +','+ data.ymax +');',(err, result, field) => {
-            if (err) { console.log(err) }
-            console.log(result);
-        }) ;
+            if (err) { console.log(err); }
+        });
     });
 }
 
 
-function saveImage(canvas, group_id, cycle, resolve) {
+function saveImage(canvas, group_id, item_name, cycle, resolve) {
     const imageData = canvas.toDataURL({
         width: canvas.width,
         height: canvas.height,
         left: 0,
         top: 0,
-        format: 'png',
-    }).replace('data:image/png;base64', '');
+        format: 'jpeg',
+    }).replace('data:image/jpeg;base64', '');
 
     var buff = new Buffer(imageData, 'base64');
-    fs.writeFileSync(destination + 10 + '_' + ( cycle + 1 ) + '.png', buff);
+    fs.writeFileSync(destination + item_name + '_' + ( cycle + 1 ) + '.jpeg', buff);
 
-    resolve()
+    console.log("resolve");
+    resolve();
 }

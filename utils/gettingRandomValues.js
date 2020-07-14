@@ -6,8 +6,8 @@
 function getRandomPosition(itemWidth, itemHeight, canvasWidth, canvasHeight, scale) {
     var x, y;
 
-    x = Math.floor(Math.random() * (canvasWidth - (itemWidth * scale)));
-    y = Math.floor(Math.random() * (canvasHeight - (itemHeight * scale)));
+    x = Math.floor(Math.random() * Math.abs((canvasWidth) - (itemWidth * scale)));
+    y = Math.floor(Math.random() * Math.abs((canvasHeight) - (itemHeight * scale)));
 
     return {x: x, y: y}
 }
