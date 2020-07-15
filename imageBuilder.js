@@ -32,12 +32,12 @@ module.exports.build_response = {
     }
 };
 
-module.exports.build_image = (group_id, item_name, cycle, model, connection) => {
+module.exports.build_image = (group_id, item_name, cycle, model, dir, connection) => {
     return new Promise((resolved, reject) => {
         //canvas 객체 생성
         new Promise((resolve, reject) => {
             getBackground(group_id, canvas, resolve, connection);
-            getImage(group_id, item_name, resolved, reject, cycle, model, canvas, connection);
+            getImage(group_id, item_name, resolved, reject, cycle, model, canvas, dir, connection);
         }).then(_ => {
             // console.log("updateProcess");
             updateProcess(group_id, cycle, connection);
@@ -78,7 +78,7 @@ function getRandomBackground() {
     return basicBackground[count];
 }
 
-function getImage(group_id, item_name, build_resolve, build_reject, cycle, model, canvas, connection) {
+function getImage(group_id, item_name, build_resolve, build_reject, cycle, model, canvas, dir, connection) {
     //group_id로 파일이름 가져오는 쿼리문
     connection.query("select filename, item_number from tb_build_item where TYPE = 'item' and group_idx = (select idx from tb_build_group where group_id = '" + group_id + "') order by item_number;", (err, result, field) => {
         //에러있으면 그냥 알려줌
@@ -207,7 +207,7 @@ function getImage(group_id, item_name, build_resolve, build_reject, cycle, model
         //프로미스들이 모두 작업을 끝내면
         Promise.all(promises).then(_ => {
             savePosition(points, item_name, randomImage, model, cycle, connection);
-            saveImage(canvas, group_id, item_name, cycle, build_resolve)
+            saveImage(canvas, group_id, item_name, cycle, dir, build_resolve)
         });
     });
 }
@@ -289,7 +289,7 @@ function saveData(image, item_name, file, model, cycle, connection) {
 }
 
 
-function saveImage(canvas, group_id, item_name, cycle, resolve) {
+function saveImage(canvas, group_id, item_name, cycle, dir, resolve) {
     const imageData = canvas.toDataURL({
         width: canvas.width,
         height: canvas.height,
@@ -299,8 +299,10 @@ function saveImage(canvas, group_id, item_name, cycle, resolve) {
     }).replace('data:image/jpeg;base64', '');
 
     var buff = new Buffer(imageData, 'base64');
-    fs.writeFileSync(destination + item_name + '_' + ( cycle + 1 ) + '.jpeg', buff);
-
-    console.log("resolve");
+    if (dir !== undefined) {
+        fs.writeFileSync(dir + '/' + item_name + '_' + ( cycle + 1 ) + '.jpeg', buff);
+    } else {
+        fs.writeFileSync(destination + item_name + '_' + (cycle + 1) + '.jpeg', buff);
+    }
     resolve();
 }

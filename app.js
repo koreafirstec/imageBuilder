@@ -44,13 +44,13 @@ function build_uuid() {
     });
 }
 
-async function buildGroup(id, name, nowCycle, cycle, model) {
+async function buildGroup(id, name, nowCycle, cycle, model, dir) {
     // console.log("cycle : " + cycle + ", now : " + nowCycle);
     // console.log("value : " + (nowCycle < cycle) );
     if (nowCycle < cycle) {
-        await builder.build_image(id, name, nowCycle, model, connection)
+        await builder.build_image(id, name, nowCycle, model, dir, connection)
             .then(_ => {
-                buildGroup(id, name, nowCycle + 1, cycle, model)
+                buildGroup(id, name, nowCycle + 1, cycle, model, dir)
             });
     }
 }
@@ -228,6 +228,7 @@ app.post("/build", (req, res) => {
     // var rotateAngle = req.body.rotate_angle;
     var cycle = req.body.cycle;
     var model = req.body.model_id;
+    var uidx = req.body.user_idx;
 
     var promises = [];
 
@@ -236,12 +237,23 @@ app.post("/build", (req, res) => {
     console.log("cycle : " + cycle);
     console.log("model : " + model);
 
+    if (uidx !== undefined) {
+        var dir = ('D:/projects/titan/src/web/app/model_file/' + uidx + '/all_images');
+
+        fs.mkdir(dir, err => {
+            if (err && err.code != 'EEXIST') {
+                console.log("hello");
+                console.log("Already Exists!")
+            }
+        })
+    }
+
     checkGroupIdExist(id, async (isValid, err) => {
         if (isValid) {
             await setProcess(id, cycle);
 
             var name = await getItemNameByGroupId(id);
-            buildGroup(id, name, 0, cycle, model);
+            buildGroup(id, name, 0, cycle, model, dir);
         } else {
             if (err !== null) {
                 console.log(err);
