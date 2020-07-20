@@ -13,6 +13,7 @@ const canvas = new fabric.Canvas('canvas', {
     width: canvasSize,
     height: canvasSize,
 });
+const uploadDir = 'D:/projects/src/web/app/images/builder_uploads';
 const destination = process.env.generatedImagesDir;
 
 //----------------Code----------------
@@ -121,7 +122,7 @@ function getImage(group_id, item_name, build_resolve, build_reject, cycle, model
             var promise = new Promise((resolve, reject) => {
 
                 //이미지 불러오기
-                fabric.Image.fromURL(('file://' + __dirname + '/uploads/' + filename), (img) => {
+                fabric.Image.fromURL(('file://' + uploadDir + '/' + filename), (img) => {
                     //랜덤 스케일 불러오기
 
                     var scale = 3;
@@ -159,14 +160,6 @@ function getImage(group_id, item_name, build_resolve, build_reject, cycle, model
 
                         canvas.add(img);
                         roop += 1;
-                        //
-                        // console.log("test : " + roop);
-                        // if (roop % 10 === 0) {
-                        //     console.log("x : " + canvas.item(0).aCoords.tl.x);
-                        //     console.log("y : " + canvas.item(0).aCoords.tl.y);
-                        //     console.log("w : " + canvas.item(0).aCoords.br.x);
-                        //     console.log("h : " + canvas.item(0).aCoords.br.y);
-                        // }
 
                     } while (
                         isOverParent(canvas.item(0).aCoords.tl.x, canvasSize) ||
@@ -177,8 +170,6 @@ function getImage(group_id, item_name, build_resolve, build_reject, cycle, model
                         isOverParent(canvas.item(0).aCoords.bl.y, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.br.x, canvasSize) ||
                         isOverParent(canvas.item(0).aCoords.br.y , canvasSize));
-
-                    // console.log("pass");
 
                     let aCoords = canvas.item(0).aCoords;
                     let leftTop = findValue(aCoords, lt);
@@ -273,7 +264,7 @@ function saveData(image, item_name, file, model, cycle, connection) {
         var data = {
             fk_model_idx: model,
             fk_shape_idx: result[0].shape_idx,
-            image_name: 'item_name',
+            image_name: item_name,
             // image_name: result[0].item_name,
             xmin: file.ltx,
             ymin: file.lty,

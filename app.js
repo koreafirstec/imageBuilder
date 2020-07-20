@@ -15,7 +15,7 @@ require('dotenv').config();
 //----------------Multer----------------
 
 //Only English
-const destination = 'uploads/';
+const destination = 'D:/projects/src/web/app/images/builder_uploads';
 const filename = (req, file, cb) => cb(null, Date.now() + "_" + file.originalname);
 
 const allowedImagesExts = ['jpg', 'png', 'gif', 'jpeg'];
@@ -232,13 +232,8 @@ app.post("/build", (req, res) => {
 
     var promises = [];
 
-    console.log("hello");
-    console.log("id    : " + id);
-    console.log("cycle : " + cycle);
-    console.log("model : " + model);
-
     if (uidx !== undefined) {
-        var dir = ('D:/projects/titan/src/web/app/model_file/' + uidx + '/all_images');
+        var dir = ('D:/projects/src/web/app/model_file/' + uidx + '/all_images');
 
         fs.mkdir(dir, err => {
             if (err && err.code != 'EEXIST') {
@@ -265,6 +260,30 @@ app.post("/build", (req, res) => {
     });
 
     res.status(200).send('done');
+});
+
+//업로드이미지
+app.post("/images", async (req, res) => {
+    var id = req.body.item_idx;
+
+    console.log(id);
+
+    connection.query("select filename from tb_build_item where item_number = '" + id + "';", (err, result, fields) => {
+        if (err) {
+            console.log(err);
+        }
+        console.log(result);
+        var files = [];
+        result.forEach(async item => {
+            await files.push(item.filename)
+        });
+
+        var object = {};
+        object.files = files;
+
+
+        res.status(200).send(JSON.stringify(object))
+    });
 });
 
 app.delete("/delete", (req, res) => {
