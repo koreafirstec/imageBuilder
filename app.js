@@ -205,17 +205,18 @@ app.post('/upload', upload.array('img'), (req, res) => {
         return;
     }
 
+    console.log(num);
+
     connection.query("select idx from tb_build_group where group_id = '" + id + "';", (err, result, field) => {
         if (result.length > 0) {
             files.forEach(file => {
                 connection.query("insert into tb_build_item(group_idx, shape_idx, item_name, item_number, filename, TYPE) values((select idx from tb_build_group where group_id = '" + id + "'), '"+ shape_idx +"', '"+ item_name +"', '"+ num +"', '" + file.filename + "', '" + type + "');", (err, result, field) => {
                     if (err) { console.log(err) }
-                    console.log(result);
                 });
+                console.log("item_inserted at : " + id)
             });
             res.status(200).send("done");
         } else {
-            console.log("else");
             res.status(412).send("id doesn't exist");
         }
     });
@@ -232,13 +233,16 @@ app.post("/build", (req, res) => {
 
     var promises = [];
 
+    console.log('uidx');
+    console.log(uidx);
     if (uidx !== undefined) {
-        var dir = ('D:/projects/src/web/app/model_file/' + uidx + '/all_images');
+        var dir = ('D:/projects/src/web/app/images/builder_generated/' + uidx + '/all_images');
 
         fs.mkdir(dir, err => {
             if (err && err.code != 'EEXIST') {
                 console.log("hello");
-                console.log("Already Exists!")
+                console.log("Already Exists!");
+                console.log(err);
             }
         })
     }
